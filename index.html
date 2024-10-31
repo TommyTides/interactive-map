@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>SAIL Amsterdam Map</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+
+        .map-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .legend {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .legend-item {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border: 1px solid #666;
+        }
+
+        .marker-icon {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .custom-popup {
+            max-width: 300px;
+        }
+
+        .custom-popup img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .custom-popup h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        .custom-popup p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .custom-popup .hours {
+            font-weight: bold;
+            color: #2196F3;
+        }
+
+        .location-marker {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #4285f4;
+            position: relative;
+        }
+
+        .location-marker::before {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            width: 100%;
+            height: 100%;
+            background: #4285f4;
+            animation: pulse 2s ease-out infinite;
+            z-index: -1;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(3);
+                opacity: 0;
+            }
+        }
+
+        #location-error {
+            display: none;
+            background: #ff5252;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        #location-button {
+            background: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        #location-button:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="map-container">
+        <h1>SAIL Amsterdam Interactive Map</h1>
+        <div id="location-error"></div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        // Initialize map centered on Amsterdam harbor
+        const map = L.map('map').setView([52.3824, 4.9039], 15);
+        let userLocationMarker = null;
+        let userLocationCircle = null;
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Define the three sea zones following water boundaries
+        const seaZones = [
+            {
+                name: 'Blue Sea (Hospitalty)',
+                coords: [
+                    [52.40451, 4.85664],
+                    [52.41378, 4.86703],
+                    [52.41006, 4.87402],
+                    [52.40250, 4.87570],
+                    [52.39592, 4.87892],
+                    [52.39352, 4.86681]
+                ],
+                color: '#0000FF',
+                fillOpacity: 0.4,
+                description: 'Hospitality zone for SAIL Amsterdam'
+            },
+            {
+                name: 'Green Sea (Navigating the Future)',
+                coords: [
+                    [52.41169, 4.88171],
+                    [52.40855, 4.87724],
+                    [52.39409, 4.89492],
+                    [52.39781, 4.90668]
+                ],
+                color: '#00FF00',
+                fillOpacity: 0.4,
+                description: 'Navigating the Future zone'
+            },
+            {
+                name: 'White Sea (Young and Urban)',
+                coords: [
+                    [52.38210, 4.90308],
+                    [52.38487, 4.91003],
+                    [52.39535, 4.90282],
+                    [52.39807, 4.89578],
+                    [52.38403, 4.89939]
+                ],
+                color: '#FFFFFF',
+                fillOpacity: 0.4,
+                description: 'Young and Urban zone'
+            },
+            {
+                name: 'Yellow Sea (the Heart)',
+                coords: [
+                    [52.38136, 4.90419],
+                    [52.37707, 4.89853],
+                    [52.37591, 4.91552],
+                    [52.37272, 4.93406],
+                    [52.37387, 4.94144],
+                    [52.37738, 4.93921],
+                    [52.38341, 4.93355],
+                    [52.38335, 4.91175]
+                ],
+                color: '#FFD700',
+                fillOpacity: 0.4,
+                description: 'The Heart zone'
+            },
+            {
+                name: 'Red Sea (the Livingroom)',
+                coords: [
+                    [52.37565, 4.91475],
+                    [52.37020, 4.90849],
+                    [52.36307, 4.92033],
+                    [52.36412, 4.92960],
+                    [52.36522, 4.93441],
+                    [52.37345, 4.93295]
+                ],
+                color: '#FF0000',
+                fillOpacity: 0.4,
+                description: 'The Livingroom zone'
+            }
+        ];
+
+
+        // Define markers for different facilities with detailed information
+        const markers = [
+            {
+                position: [52.3845, 4.9150],
+                title: 'Toilet Facilities',
+                color: '#2196F3',
+                details: {
+                    description: 'Modern restroom facilities with accessibility features',
+                    hours: '24/7',
+                    amenities: [
+                        'Wheelchair accessible',
+                        'Baby changing stations',
+                        'Water fountain'
+                    ],
+                    price: 'Free for event ticket holders'
+                }
+            },
+            {
+                position: [52.3795, 4.9050],
+                title: 'Dining Ship',
+                color: '#FFC107',
+                details: {
+                    description: 'Floating restaurant featuring Dutch and international cuisine',
+                    hours: '11:00 - 23:00',
+                    amenities: [
+                        'Full-service restaurant',
+                        'Bar with local beers',
+                        'Outdoor seating',
+                        'Vegetarian options'
+                    ],
+                    price: 'Mid-range, €15-35 per person'
+                }
+            },
+            {
+                position: [52.3865, 4.8950],
+                title: 'Event Stage',
+                color: '#4CAF50',
+                details: {
+                    description: 'Main entertainment venue for live performances',
+                    hours: '12:00 - 22:00',
+                    schedule: [
+                        '12:00 - Maritime Music',
+                        '15:00 - Sea Shanty Performances',
+                        '18:00 - Evening Concert',
+                        '20:00 - Closing Show'
+                    ],
+                    amenities: [
+                        'Covered seating area',
+                        'Food and drink stands',
+                        'Large screens for better viewing'
+                    ]
+                }
+            }
+        ];
+
+        // Create custom icon for markers
+        function createCustomIcon(color) {
+            return L.divIcon({
+                className: 'marker-icon',
+                html: `<div style="background-color: ${color}; width: 100%; height: 100%; border-radius: 50%;"></div>`,
+                iconSize: [25, 25]
+            });
+        }
+
+        // Function to create detailed popup content
+        function createPopupContent(markerInfo) {
+            const details = markerInfo.details;
+            let content = `
+                <div class="custom-popup">
+                    <h3>${markerInfo.title}</h3>
+                    <p>${details.description}</p>`;
+
+            if (details.hours) {
+                content += `<p class="hours">Hours: ${details.hours}</p>`;
+            }
+
+            if (details.amenities) {
+                content += `<p><strong>Amenities:</strong></p><ul>`;
+                details.amenities.forEach(amenity => {
+                    content += `<li>${amenity}</li>`;
+                });
+                content += `</ul>`;
+            }
+
+            if (details.schedule) {
+                content += `<p><strong>Schedule:</strong></p><ul>`;
+                details.schedule.forEach(time => {
+                    content += `<li>${time}</li>`;
+                });
+                content += `</ul>`;
+            }
+
+            if (details.price) {
+                content += `<p><strong>Price:</strong> ${details.price}</p>`;
+            }
+
+            content += `</div>`;
+            return content;
+        }
+
+        // Add sea zones to the map
+        seaZones.forEach(zone => {
+            const polygon = L.polygon(zone.coords, {
+                color: zone.color,
+                fillColor: zone.color,
+                fillOpacity: zone.fillOpacity,
+                weight: 2,
+                smoothFactor: 0.5,  // Add smoothing to the polygon
+                radius: 8  // Add corner radius
+            }).addTo(map);
+
+            polygon.bindPopup(`
+                <div class="custom-popup">
+                    <h3>${zone.name}</h3>
+                    <p>${zone.description}</p>
+                </div>
+            `);
+        });
+
+        // Add markers to the map
+        markers.forEach(markerInfo => {
+            const marker = L.marker(markerInfo.position, {
+                icon: createCustomIcon(markerInfo.color)
+            }).addTo(map);
+
+            marker.bindPopup(createPopupContent(markerInfo));
+        });
+
+        // Function to handle user location
+        function findUserLocation() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    function (position) {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+
+                        if (userLocationMarker) {
+                            map.removeLayer(userLocationMarker);
+                        }
+                        if (userLocationCircle) {
+                            map.removeLayer(userLocationCircle);
+                        }
+
+                        const locationIcon = L.divIcon({
+                            className: 'location-marker',
+                            iconSize: [24, 24]
+                        });
+
+                        userLocationMarker = L.marker([lat, lng], {
+                            icon: locationIcon
+                        }).addTo(map);
+
+                        userLocationCircle = L.circle([lat, lng], {
+                            radius: position.coords.accuracy,
+                            color: '#4285f4',
+                            fillColor: '#4285f4',
+                            fillOpacity: 0.1
+                        }).addTo(map);
+
+                        map.setView([lat, lng], 16);
+                        document.getElementById('location-error').style.display = 'none';
+                    },
+                    function (error) {
+                        const errorDiv = document.getElementById('location-error');
+                        errorDiv.style.display = 'block';
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorDiv.innerHTML = "Location access denied. Please enable location services.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorDiv.innerHTML = "Location information unavailable.";
+                                break;
+                            case error.TIMEOUT:
+                                errorDiv.innerHTML = "Location request timed out.";
+                                break;
+                            default:
+                                errorDiv.innerHTML = "An unknown error occurred.";
+                                break;
+                        }
+                    }
+                );
+            } else {
+                document.getElementById('location-error').innerHTML = "Geolocation is not supported by your browser.";
+                document.getElementById('location-error').style.display = 'block';
+            }
+        }
+
+        // Add legend
+        // Add legend
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = `
+        <h3>Legend</h3>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #0000FF"></div>
+            <span>Hospitalty</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #00FF00"></div>
+            <span>Navigating the Future</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FFFFFF; border: 1px solid #666;"></div>
+            <span>Young and Urban</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FFD700"></div>
+            <span>The Heart</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FF0000"></div>
+            <span>The Livingroom</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #2196F3"></div>
+            <span>Toilet Facilities</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FFC107"></div>
+            <span>Dining Ship</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4CAF50"></div>
+            <span>Event Stage</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4285f4"></div>
+            <span>Your Location</span>
+        </div>
+    `;
+            return div;
+        };
+        legend.addTo(map);
+
+        // Add location control button
+        const locationButton = L.control({ position: 'topright' });
+        locationButton.onAdd = function (map) {
+            const btn = L.DomUtil.create('button', 'location-button');
+            btn.innerHTML = '📍 Find My Location';
+            btn.onclick = findUserLocation;
+            return btn;
+        };
+        locationButton.addTo(map);
+
+        // Initially try to get user location
+        findUserLocation();
+    </script>
+</body>
+
+</html>
